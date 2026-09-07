@@ -7,6 +7,9 @@ from src import gams_inc_parser
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "raw" / "reference_spain"
 
 
+# Measured wall-clock solve time on this project's reference hardware: ~140s (4 runs,
+# range 139.9-141.4s). See design spec section 8 for what this implies for the full
+# ~684-solve Version A+B sweep (~26.6h sequential at this rate).
 def test_full_scale_solve_on_real_spain_reference_data_is_optimal_and_balanced():
     Ppvu = gams_inc_parser.load_inc_as_series(DATA_DIR / "PpvuMadridSarah20052023_localtime.inc")
     lam = gams_inc_parser.load_inc_as_series(DATA_DIR / "lambda_spain_localtime.inc")

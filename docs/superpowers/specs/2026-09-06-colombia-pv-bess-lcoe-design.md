@@ -211,6 +211,14 @@ o comprar y vender simultáneamente al mismo precio+peaje, nunca es óptimo, por
 podría ser válida y drásticamente más rápida. Solo se adopta si se verifica empíricamente que coincide
 con la solución del MILP completo en un conjunto de casos de prueba.
 
+Este riesgo ya se materializó: la corrida de validación a escala completa (Task 9,
+`tests/test_dispatch_model_full_scale.py`, datos reales de referencia España, 8760 horas) midió un
+tiempo real de resolución de **~140 segundos** (4 corridas independientes, rango 139.9-141.4s), es
+decir ~4.7× el umbral de alerta original de ~30s — a esa tasa, las ~684 resoluciones completas
+tomarían **~140s × 684 ≈ 26.6 horas** en secuencial, lo que refuerza que la mitigación de relajación
+LP (o la paralelización entre núcleos/máquinas) descrita arriba probablemente será **necesaria**, no
+solo una precaución, para el plan de escalamiento posterior.
+
 ## 9. Fuera de alcance (explícito)
 
 - Raster nacional real a ~5 km (se usan 12 ubicaciones interpoladas).
