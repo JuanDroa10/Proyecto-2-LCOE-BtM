@@ -4,7 +4,6 @@ Uses PVGIS's own PV simulation (pvcalculation=1), which already accounts for
 module temperature de-rating and system losses, so no separate cell-
 temperature model is needed for the historical (Version A) case.
 """
-import ast
 from pathlib import Path
 
 import pandas as pd
@@ -24,15 +23,9 @@ def fetch_pv_profile(lat: float, lon: float, year: int, cache_dir: Path) -> pd.S
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_file = cache_dir / f"pvgis_{lat:.4f}_{lon:.4f}_{year}.csv"
     if cache_file.exists():
-        index_vals = []
-        data_vals = []
-        with open(cache_file, 'r') as f:
-            next(f)  # skip header
-            for line in f:
-                idx_str, val_str = line.rstrip().split(',')
-                index_vals.append(int(idx_str))
-                data_vals.append(ast.literal_eval(val_str))
-        return pd.Series(data_vals, index=index_vals, name="pv_per_unit")
+        # float_precision='round_trip' ensures floats survive the CSV round-trip exactly;
+        # default read_csv parsing isn't guaranteed to be round-trip-safe with to_csv output.
+        return pd.read_csv(cache_file, index_col=0, float_precision='round_trip').iloc[:, 0]
 
     session = http_utils.get_session()
     params = {
@@ -59,11 +52,5 @@ def fetch_pv_profile(lat: float, lon: float, year: int, cache_dir: Path) -> pd.S
         )
 
     series = pd.Series(values, index=range(8760), name="pv_per_unit")
-    
-    # Write to CSV using repr() to preserve floating-point precision exactly
-    with open(cache_file, 'w') as f:
-        f.write(',pv_per_unit\n')
-        for idx, val in series.items():
-            f.write(f'{idx},{repr(val)}\n')
-    
+    series.to_csv(cache_file)
     return series
