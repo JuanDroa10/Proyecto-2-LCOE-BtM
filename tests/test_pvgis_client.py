@@ -21,3 +21,21 @@ def test_fetch_pv_profile_uses_cache_on_second_call(tmp_path):
     second = pvgis_client.fetch_pv_profile(lat=4.7110, lon=-74.0721, year=2020, cache_dir=tmp_path)
     assert first.equals(second)
     assert len(list(tmp_path.glob("*.csv"))) == 1  # no new file written
+
+
+def test_fetch_pv_profile_aligns_peak_to_plausible_local_hour(tmp_path):
+    """Regression test for a UTC/local-time misalignment: PVGIS's seriescalc
+    endpoint returns hourly data indexed in UTC regardless of the `localtime`
+    parameter (confirmed directly against the live API — Bogota's raw hourly
+    output peaks at the "16:30" timestamp both with and without
+    `localtime=1`). Colombia is UTC-5 year-round, so a correctly-aligned
+    series should show its daily PV peak in the local late-morning/early-
+    afternoon window, not at UTC hour 16 (Bogota's solar noon expressed in
+    UTC, ~16:56 UTC from longitude -74.07 degrees)."""
+    series = pvgis_client.fetch_pv_profile(lat=4.7110, lon=-74.0721, year=2020, cache_dir=tmp_path)
+    first_day = series.iloc[0:24]
+    peak_hour = int(first_day.to_numpy().argmax())
+    assert 9 <= peak_hour <= 15, (
+        f"expected the daily PV peak in local hour [9,15], got hour {peak_hour} — "
+        "series may still be UTC-indexed instead of Colombia-local-time-indexed"
+    )

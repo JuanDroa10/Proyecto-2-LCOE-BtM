@@ -51,6 +51,18 @@ def fetch_pv_profile(lat: float, lon: float, year: int, cache_dir: Path) -> pd.S
             f"Expected 8760 hourly PV values for ({lat},{lon},{year}), got {len(values)}"
         )
 
+    # PVGIS returns hourly data indexed in UTC. Colombia is UTC-5 year-round (no DST),
+    # so local midnight (hour 0) is UTC hour 5. Shift circularly so the series aligns
+    # with XM's locally-indexed price series (both must share the same hour-0
+    # convention for the dispatch model's arbitrage logic to compare like with like).
+    # This treats the 8760-hour year as cyclic: the last 5 local hours of the year
+    # borrow from the first 5 UTC hours of the same calendar year's data rather than
+    # the true adjacent year — a documented simplification, acceptable because those
+    # hours have near-zero PV output regardless. A future refinement could fetch an
+    # extra year on each side and slice the exact local-time window instead.
+    COLOMBIA_UTC_OFFSET_HOURS = 5
+    values = values[COLOMBIA_UTC_OFFSET_HOURS:] + values[:COLOMBIA_UTC_OFFSET_HOURS]
+
     series = pd.Series(values, index=range(8760), name="pv_per_unit")
     series.to_csv(cache_file)
     return series
