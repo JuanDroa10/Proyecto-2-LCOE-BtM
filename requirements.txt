@@ -1,0 +1,9 @@
+pandas
+numpy
+requests
+certifi
+aiohttp
+nest_asyncio
+pydataxm
+pulp
+pytest
