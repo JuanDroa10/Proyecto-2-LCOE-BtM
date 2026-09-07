@@ -92,3 +92,29 @@ def test_solve_sizing_dispatch_builds_and_correctly_cycles_a_battery_under_stron
             assert is_pv_hour, f"charging happened outside PV hours at hour {t}"
         if result.Pd[t] > 1e-6:
             assert not is_pv_hour, f"discharging happened during a PV hour at hour {t}"
+
+
+def test_solve_sizing_dispatch_raises_when_big_m_bound_is_implausibly_tight():
+    """Runtime big-M non-binding guard (see M_BESS_INVERTER in
+    solve_sizing_dispatch): _toy_two_day_scenario_with_strong_arbitrage, with
+    the *default* AGGE bounds (Ppv_min_kw=1000, Ppv_max_kw=5000), already
+    independently solves to Ppvinst_kw=1000 (the AGGE floor, chosen freely,
+    not because it's pinned) and PinverterBESS_kw~=1852.4 (confirmed both in
+    task-9-report.md and by re-running it directly here) — comfortably
+    clear of the default M_BESS_INVERTER=2*5000=10000.
+
+    This test narrows Ppv_max_kw down to 1000 (still a legal single-point
+    AGGE range, and exactly the value the model already independently
+    prefers) purely to shrink M_BESS_INVERTER to 2*1000=2000 kW, without
+    changing the genuine underlying economics at all (Ppvinst=1000 either
+    way) — so this is not a contrived/degenerate corner, just a case where a
+    legitimate, narrow Ppv_max_kw configuration happens to leave M
+    uncomfortably close (1852.4/2000 ~= 92.6%) to the real optimum. Confirms
+    solve_sizing_dispatch raises rather than silently returning a result
+    that may be distorted by a near-binding linearization constant."""
+    import pytest
+
+    Plu, Ppvu, lam, psi = _toy_two_day_scenario_with_strong_arbitrage()
+    params = dm.SizingParams(Plinst_kw=1000.0, Ppv_min_kw=1000.0, Ppv_max_kw=1000.0)
+    with pytest.raises(RuntimeError, match="big-M"):
+        dm.solve_sizing_dispatch(Plu, Ppvu, lam, psi, params)

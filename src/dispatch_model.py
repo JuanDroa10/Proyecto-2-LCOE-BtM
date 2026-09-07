@@ -163,6 +163,32 @@ def solve_sizing_dispatch(
     prob.solve(pulp.PULP_CBC_CMD(msg=0))
     status = pulp.LpStatus[prob.status]
 
+    # Big-M non-binding guard (runtime, not just the test-time checks in
+    # tests/test_dispatch_model.py and tests/test_dispatch_model_full_scale.py):
+    # M_BESS_INVERTER is only meant to be a linearization device (see its
+    # definition above), generous enough to never actually constrain the
+    # optimal battery-inverter size. If some future location/year/load-curve
+    # combination in the multi-location sweep pushes the solved PinverterBESS
+    # within 10% of that bound, the reported "optimum" may actually be
+    # artificially capped by the linearization rather than reflecting genuine
+    # project economics, and must not be trusted silently. Raised as an
+    # exception (rather than warnings.warn) to match how the rest of this
+    # module, and sibling data-client modules (pvgis_client.py, xm_prices.py,
+    # lcoe.py), already signal an untrustworthy result — via a raised
+    # exception, not a warning — since a warning can be filtered or simply
+    # scroll by unnoticed in an unattended multi-location/multi-year sweep,
+    # exactly the scenario this guard exists to protect.
+    if status == "Optimal" and PinverterBESS.varValue is not None:
+        if PinverterBESS.varValue >= 0.9 * M_BESS_INVERTER:
+            raise RuntimeError(
+                f"PinverterBESS solved to {PinverterBESS.varValue:.2f} kW, within 10% of the "
+                f"big-M linearization bound M_BESS_INVERTER={M_BESS_INVERTER:.2f} kW "
+                f"(= 2.0 * Ppv_max_kw={params.Ppv_max_kw:.2f}). The big-M constant may be "
+                "binding and distorting the reported optimum — this result should not be "
+                "trusted. Consider raising Ppv_max_kw or otherwise increasing the M_BESS_INVERTER "
+                "linearization bound and re-solving."
+            )
+
     Wl = float(sum(Plinst * Plu_v[t] for t in T))
     crf = finance.capital_recovery_factor(params.discount_rate, params.project_life_years)
 
