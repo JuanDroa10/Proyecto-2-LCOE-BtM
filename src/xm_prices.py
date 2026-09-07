@@ -34,7 +34,10 @@ def fetch_spot_prices_cop_per_kwh(year: int, cache_dir: Path) -> pd.Series:
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_file = cache_dir / f"xm_prices_{year}.csv"
     if cache_file.exists():
-        return pd.read_csv(cache_file, index_col=0).iloc[:, 0]
+        # float_precision='round_trip' ensures floats survive the CSV round-trip exactly;
+        # default read_csv parsing isn't guaranteed to be round-trip-safe with to_csv output
+        # (same underlying pandas issue already fixed in pvgis_client.py).
+        return pd.read_csv(cache_file, index_col=0, float_precision='round_trip').iloc[:, 0]
 
     client = _get_client()
     df = client.request_data("PrecBolsNaci", "Sistema", dt.date(year, 1, 1), dt.date(year, 12, 31))
