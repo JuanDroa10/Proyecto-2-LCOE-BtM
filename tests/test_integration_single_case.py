@@ -21,7 +21,7 @@ def test_bogota_2020_datacenter_end_to_end():
     # (see lcoe.compute_lcoe vs. dispatch_model.solve_sizing_dispatch's `npv` objective),
     # and the dispatch model's objective explicitly *maximizes* NPV. Whenever the optimizer
     # finds a genuinely profitable project (positive NPV — common here given Bogota's strong
-    # solar resource and the current placeholder AGGE backup charge, see creg_tariffs.py),
+    # solar resource and the AGGE backup charge, see creg_tariffs.py),
     # LCOE_net is negative by construction. This is not a defect: Task 9's own full-scale
     # reference-data run hit the identical sign (LCOE_net ~= -$18.1/MWh on Spain data,
     # see task-9-report.md) and documented it as expected, not a red flag. Bound magnitude

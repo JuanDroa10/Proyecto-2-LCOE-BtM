@@ -27,7 +27,7 @@ def run(location_name: str, year: int, load_curve_name: str):
 
     params = dispatch_model.SizingParams(
         Plinst_kw=1000.0,
-        agge_backup_charge_usd_per_kwp_year=creg_tariffs.AGGE_BACKUP_CHARGE_USD_PER_KWP_YEAR,
+        agge_backup_charge_usd_per_kwp_year=creg_tariffs.get_agge_backup_charge_usd_per_kwp_year(location_name, year),
     )
     result = dispatch_model.solve_sizing_dispatch(plu, pv_per_unit, prices_usd, n2_usd_series, params)
     lcoe_result = lcoe.compute_lcoe(result)
