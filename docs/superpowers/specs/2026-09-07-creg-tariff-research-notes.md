@@ -47,7 +47,7 @@ purchase component is already captured separately by this project's XM spot-pric
 | SDL | N2 (COP/kWh) | Breakdown |
 |---|---|---|
 | ENEL-CODENSA | 358.25 | Jan 2026: T=52.97 + D=191.75 + Pr=19.28 + R=17.79 + Cv=76.46 |
-| EPM | 379.50 | Jan 2026, punta/fuera-punta average: (383.56+375.36)/2 |
+| EPM | 379.50 | Jan 2026, punta/fuera-punta average: (383.56+375.36)/2 = 379.46, rounded to 379.50 |
 | CELSIA | 415.92 | Aug 2026, Valle del Cauca (excl. Cali): T=49.31 + D=163.75 + Pr=31.02 + R=6.09 + Cv=165.75 |
 | EMCALI | 271.33 | Jan 2026 (via EPM cross-reference table), Cali: T=54.14 + D=154.03 + Pr=24.16 + R=16.70 + Cv=22.30 |
 | AIR-E | 306.70 | Aug 2026: T=49.31 + D=77.22 + Pr=33.85 + R=8.23 + Cv=138.09 |
@@ -94,6 +94,12 @@ terms of D specifically, not the full N2 tariff.
 | AIR-E | 77.22 |
 | DISPAC | 127.75 |
 | EMSA | 183.73 |
+
+EPM's D value is real and sourced: EPM's own current tariff bulletin lists the D component as
+198.48 COP/kWh identically in **both** the "Punta" and "Fuera de Punta" columns — unlike G, T, Pr,
+and R (which do vary by time-of-day period for EPM), D does not vary by period. That's why
+`D_TARIFF_COP_PER_KWH["EPM"]` is a single unambiguous figure even though `N2_TARIFF_COP_PER_KWH["EPM"]`
+is itself an average of two time-of-day totals (see above).
 
 National average fallback (AFINIA, ENERCA, ELECTROCAQUETA, EE-PUTUMAYO):
 
@@ -181,3 +187,33 @@ tariff makes on-site storage/arbitrage relatively more attractive than grid purc
 rose (+57.5%, the higher real network tariff feeds directly into the gross-cost baseline), and net
 LCOE became more negative (still profitable, more so). This shift is the intended result of
 replacing placeholders with real tariff data, not a regression.
+
+The reviewer independently traced the +562% battery-size swing through `dispatch_model.py`'s
+objective: a higher `psi` makes storing PV surplus for self-consumption strictly more valuable,
+while pure grid arbitrage actually *worsens* as `psi` rises. Since PV is already pinned near its
+5000 kWp ceiling, the battery — not PV — absorbs the incentive from the higher network tariff,
+explaining why battery capacity grew far more than PV capacity did.
+
+## 7. Review-fix pass (post-review addendum)
+
+An independent review ("With fixes" verdict) confirmed the values, units, G-exclusion logic,
+non-circular fallback design, and the battery-size mechanism above as correct/economically sound,
+and requested four follow-ups, addressed as follows:
+
+1. **Test coverage gap (Important):** the original `test_get_n2_tariff_returns_a_positive_value_for_every_location`
+   only checked `> 0`, so a regression back to the flat 150 COP/kWh placeholder (or any other
+   wrong-but-positive number) would have passed silently. Added
+   `test_get_n2_tariff_returns_the_real_sourced_value_for_well_sourced_sdls` (pins Bogota=358.25 and
+   Villavicencio=423.50) and `test_get_n2_tariff_uses_the_national_average_fallback_for_unsourced_sdls`
+   (pins Yopal/ENERCA to the computed `_NATIONAL_AVERAGE_PSI_COP_PER_KWH`) to
+   `tests/test_creg_tariffs.py`.
+2. **EPM D-value sourcing (Important):** documented above in section 3 — EPM's own tariff bulletin
+   lists D=198.48 COP/kWh identically in both the "Punta" and "Fuera de Punta" columns (D doesn't
+   vary by time-of-day period for EPM, unlike G/T/Pr/R), which is why the single D figure coexists
+   with the N2 total being a punta/fuera-punta average.
+3. **EPM N2 rounding (Minor):** kept `N2_TARIFF_COP_PER_KWH["EPM"] = 379.50` as originally given
+   rather than silently correcting to the more precise 379.46; both `src/creg_tariffs.py`'s inline
+   comment and section 2's table above now say explicitly that 379.50 is a deliberate rounding of
+   379.46.
+4. **psi sensitivity sweep (Minor):** explicitly deferred by the reviewer to the later
+   sensitivity-analysis phase; no action taken in this pass.

@@ -30,7 +30,8 @@ LOCATION_SDL = {
 N2_TARIFF_COP_PER_KWH = {
     # High confidence: each operator's own current (2026) published N2 bulletin.
     "ENEL-CODENSA": 358.25,   # Jan 2026: T=52.97+D=191.75+Pr=19.28+R=17.79+Cv=76.46
-    "EPM": 379.50,            # Jan 2026, punta/fuera-punta average: (383.56+375.36)/2
+    "EPM": 379.50,            # Jan 2026, punta/fuera-punta average: (383.56+375.36)/2 = 379.46,
+                              # deliberately rounded to 379.50 (see research notes doc)
     "CELSIA": 415.92,         # Aug 2026, Valle del Cauca (excl. Cali): T=49.31+D=163.75+Pr=31.02+R=6.09+Cv=165.75
     "EMCALI": 271.33,         # Jan 2026 (via EPM cross-reference table), Cali: T=54.14+D=154.03+Pr=24.16+R=16.70+Cv=22.30
     "AIR-E": 306.70,          # Aug 2026: T=49.31+D=77.22+Pr=33.85+R=8.23+Cv=138.09
