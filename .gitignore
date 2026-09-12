@@ -1,8 +1,15 @@
-.worktrees/
-.superpowers/
-.DS_Store
+# Caché de Python (se regenera solo)
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
-data/cache/
-data/ca_bundle.pem
+*.egg-info/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores
+.vscode/
+.idea/
+*.swp
