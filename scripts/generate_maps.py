@@ -1,4 +1,6 @@
-"""Genera mapas de LCOE (gross y neto) para Colombia con contorno del país."""
+"""Genera mapas de LCOE (gross y neto) para Colombia con contorno del país
+y enmascaramiento por distancia máxima a puntos de datos."""
+
 import sys
 import json
 import urllib.request
@@ -9,8 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.path as mpath
-from matplotlib.patches import PathPatch
+from matplotlib.path import Path as MplPath
 from scipy.interpolate import Rbf
 
 from src.locations import LOCATIONS
@@ -23,25 +24,27 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 GEOJSON_URL = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/COL.geo.json"
 GEOJSON_PATH = PROJECT_ROOT / "data" / "colombia.geojson"
 
+# Distancia máxima (km) desde el punto de datos más cercano para colorear un píxel.
+# Píxeles más lejanos quedan en blanco (evita extrapolación engañosa).
+MAX_DIST_KM = 250
+
 
 def descargar_geojson():
     """Descarga el GeoJSON de Colombia si no existe localmente."""
     if GEOJSON_PATH.exists():
         return
-    print(f"⬇️  Descargando GeoJSON de Colombia...")
+    print("⬇️  Descargando GeoJSON de Colombia...")
     GEOJSON_PATH.parent.mkdir(parents=True, exist_ok=True)
     urllib.request.urlretrieve(GEOJSON_URL, GEOJSON_PATH)
     print(f"   ✅ Guardado en {GEOJSON_PATH}")
 
 
 def cargar_poligono_colombia():
-    """Carga el GeoJSON de Colombia y retorna una lista de trayectorias (paths) y un Path compuesto."""
+    """Carga el GeoJSON de Colombia y retorna una lista de anillos (arrays Nx2)."""
     with open(GEOJSON_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # Puede haber múltiples features (continente + islas)
     paths = []
-    vertices_all = []
     for feature in data["features"]:
         geom = feature["geometry"]
         if geom["type"] == "Polygon":
@@ -54,14 +57,18 @@ def cargar_poligono_colombia():
             for ring in poly:
                 arr = np.array(ring)
                 paths.append(arr)
-                vertices_all.append(arr)
-
     return paths
 
 
-def generar_mapa(lons, lats, values, titulo, output_path, colombia_paths):
-    """Genera un mapa de Colombia con LCOE interpolado y enmascarado al territorio."""
+def generar_mapa(lons, lats, values, titulo, output_path, colombia_paths,
+                 max_dist_km=MAX_DIST_KM):
+    """
+    Genera un mapa de Colombia con LCOE interpolado y enmascarado.
 
+    Parámetros:
+    - max_dist_km: distancia máxima (km) desde el punto de datos más cercano.
+                   Píxeles más alejados quedan en blanco.
+    """
     # Malla geográfica
     lon_grid = np.linspace(-79.5, -66, 300)
     lat_grid = np.linspace(-4.5, 13.5, 300)
@@ -71,22 +78,33 @@ def generar_mapa(lons, lats, values, titulo, output_path, colombia_paths):
     rbf = Rbf(lons, lats, values, function='linear', smooth=0.5)
     lcoe_grid = rbf(lon_mesh, lat_mesh)
 
-    # ------- Crear máscara con el polígono de Colombia -------
-    # Convertir el meshgrid en puntos y verificar si están dentro del polígono
-    from matplotlib.path import Path as MplPath
-    puntos = np.column_stack([lon_mesh.ravel(), lat_mesh.ravel()])
-    mascara = np.zeros(len(puntos), dtype=bool)
+    # ---------- Máscara 1: dentro del territorio colombiano ----------
+    grid_points = np.column_stack([lon_mesh.ravel(), lat_mesh.ravel()])
+    inside_colombia = np.zeros(len(grid_points), dtype=bool)
     for ring in colombia_paths:
         mpl_path = MplPath(ring)
-        mascara |= mpl_path.contains_points(puntos)
-    mascara = mascara.reshape(lon_mesh.shape)
+        inside_colombia |= mpl_path.contains_points(grid_points)
+    inside_colombia = inside_colombia.reshape(lon_mesh.shape)
 
+    # ---------- Máscara 2: dentro de max_dist_km del punto más cercano ----------
+    mean_lat_rad = np.deg2rad(np.mean(lats))
+    km_per_deg_lat = 111.0
+    km_per_deg_lon = 111.0 * np.cos(mean_lat_rad)
+
+    dlon = (lon_mesh[..., None] - np.array(lons)) * km_per_deg_lon
+    dlat = (lat_mesh[..., None] - np.array(lats)) * km_per_deg_lat
+    dist_km = np.sqrt(dlon**2 + dlat**2)     # shape: (300, 300, n_points)
+    min_dist = dist_km.min(axis=-1)          # shape: (300, 300)
+    within_buffer = min_dist <= max_dist_km
+
+    # ---------- Máscara combinada ----------
+    mascara = inside_colombia & within_buffer
     lcoe_grid_masked = np.where(mascara, lcoe_grid, np.nan)
 
-    # ------- Plot -------
+    # ---------- Plot ----------
     fig, ax = plt.subplots(figsize=(10, 12))
 
-    # Relleno de LCOE dentro de Colombia
+    # Relleno de LCOE dentro de la máscara
     contour = ax.contourf(lon_mesh, lat_mesh, lcoe_grid_masked,
                           levels=20, cmap='RdYlGn_r', extend='both')
     cbar = plt.colorbar(contour, ax=ax, shrink=0.7, label='LCOE (USD/MWh)')
@@ -101,7 +119,8 @@ def generar_mapa(lons, lats, values, titulo, output_path, colombia_paths):
     for lon, lat, name in zip(lons, lats, values.index):
         ax.annotate(name, (lon, lat), xytext=(6, 6), textcoords='offset points',
                     fontsize=9, fontweight='bold', color='black', zorder=6,
-                    bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.7, edgecolor='none'))
+                    bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                              alpha=0.7, edgecolor='none'))
 
     ax.set_xlim(-79.5, -66)
     ax.set_ylim(-4.5, 13.5)
@@ -115,7 +134,7 @@ def generar_mapa(lons, lats, values, titulo, output_path, colombia_paths):
     plt.tight_layout()
     plt.savefig(output_path, dpi=200, bbox_inches='tight')
     plt.close()
-    print(f"✅ Mapa guardado: {output_path.name}")
+    print(f"✅ Mapa guardado: {output_path.name}  (buffer={max_dist_km} km)")
 
 
 def get_location_coords():
@@ -163,7 +182,8 @@ def main():
 
     print(f"📍 Ubicaciones: {len(lcoe_gross)}")
     print(f"📊 Rango LCOE bruto: {lcoe_gross.min():.2f} - {lcoe_gross.max():.2f} USD/MWh")
-    print(f"📊 Rango LCOE neto:  {lcoe_net.min():.2f} - {lcoe_net.max():.2f} USD/MWh\n")
+    print(f"📊 Rango LCOE neto:  {lcoe_net.min():.2f} - {lcoe_net.max():.2f} USD/MWh")
+    print(f"🎯 Buffer máximo: {MAX_DIST_KM} km alrededor de cada punto\n")
 
     # Mapa 1: LCOE bruto histórico
     generar_mapa(lons, lats, lcoe_gross,
@@ -177,7 +197,7 @@ def main():
                  OUTPUT_DIR / "mapa_lcoe_net_historico.png",
                  colombia_paths)
 
-    # Mapa 3: LCOE bruto por curva de carga
+    # Mapa 3-5: LCOE bruto por curva de carga
     for curva in ['industria1', 'industria2', 'datacenter']:
         df_curva = df_ok[df_ok['load_curve'] == curva]
         lcoe_curva = df_curva.groupby('location')['lcoe_gross_usd_per_mwh'].mean()
