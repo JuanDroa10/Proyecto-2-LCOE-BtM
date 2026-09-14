@@ -1,4 +1,4 @@
-"""Descarga todos los perfiles PV para todas las ubicaciones y años (2005-2023).
+"""Descarga todos los perfiles PV para todas las ubicaciones y años (2005-2024).
 Con reintentos automáticos y verificación de archivos existentes.
 """
 import sys

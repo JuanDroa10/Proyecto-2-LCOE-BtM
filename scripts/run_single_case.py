@@ -1,4 +1,4 @@
-"""End-to-end interactive runner with clean numeric progress.
+"""Ejecuta un escenario en especifico con una curva en especifico.
 Si falta el archivo PV de un año, usa el promedio del año anterior y siguiente.
 """
 import sys

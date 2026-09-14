@@ -1,4 +1,4 @@
-"""Run all 684 scenarios (Version A: 12 locations × 19 years × 3 load curves) in parallel using processes."""
+"""Ejecuta los 684 escenarios (Versión A: 12 ubicaciones × 19 años × 3 curvas de carga) en paralelo utilizando procesos."""
 import sys
 import csv
 import multiprocessing
